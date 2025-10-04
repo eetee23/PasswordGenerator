@@ -2,6 +2,8 @@
 #include "random"
 #include "chrono"
 #include "string"
+#include "vector"
+#include "map"
 #include <windows.h>
 #include <sqlite3.h>
 
@@ -130,48 +132,70 @@ int sqlite_data_base_creation() {
 }
 
 int callback(void* data, int argc, char** argv, char** azColName) {
-    cout << "Row found" << endl;
-    cout << "data:" << data << endl;
-    cout << "argc: " << argc << endl;
-    cout << "argv: " << argv << endl;
-    cout << "azColName: " << azColName << endl;
-    if (argc > 0 && argv[0]) {
-        string* result = static_cast<string*>(data);
-        *result = argv[0];
+    // Data is the return value to calling function
+    // Number of columns in the current row
+    // Array of strings representing the values of each column in the current row
+    // Array of strings representing the names of each column in the current row
+    auto* results = static_cast<vector<map<string, string>>*>(data);
+
+    map<string, string> row;
+
+    for (int i = 0; i < argc; i++) {
+        string key = azColName[i];
+        string value = (argv[i] ? argv[i] : "NULL");
+
+        row[key] = value;
     }
+
+    results->push_back(row);
+
     return 0;
 }
 
-int check_credentials_from_database() {
+
+bool check_credentials_from_database(string& out_username, string& out_password) {
     sqlite3* db;
-    string password;
+    vector<map<string, string>> result_rows;
 
     int exit = sqlite3_open("passwords.db", &db);
     
     if (exit != SQLITE_OK) {
         cerr << "ERROR opening database for credential check" << sqlite3_errmsg(db) << endl;
-        return 1;
+        return false;
     }
 
     string check_credentials = "SELECT * FROM credentials WHERE TABLE_NAME = 'main'";
     char* message_error;
-    exit = sqlite3_exec(db, check_credentials.c_str(), callback, &password, &message_error);
+    exit = sqlite3_exec(db, check_credentials.c_str(), callback, &result_rows, &message_error);
     if (exit != SQLITE_OK) {
         cerr << "ERROR in main credentials table select" << endl;
         sqlite3_free(message_error);
-        message_error = nullptr;
-    }
-
-    if (password.empty()) {
-        cout << "password is empty" << endl;
-        create_credentials_to_db();    
         sqlite3_close(db);
-        return 1;
+        message_error = nullptr;
+        return false;
     }
-
 
     sqlite3_close(db);
-    return 0;
+
+    if (result_rows.empty()) {
+        cout << "password is empty" << endl;
+        create_credentials_to_db();    
+        return false;
+    }
+
+    for (const auto& row : result_rows) {
+        auto it_user = row.find("USERNAME");
+        auto it_pass = row.find("PASSWORD");
+
+        if (it_user != row.end() && !it_user->second.empty() &&
+            it_pass != row.end() && !it_pass->second.empty()) {
+            out_username = it_user->second;
+            out_password = it_pass->second;
+            return true;
+        }
+    }
+
+    return false;
 }
 
 void create_credentials_to_db() {
@@ -189,11 +213,10 @@ void create_credentials_to_db() {
 
     string username, password;
 
-    cout << "Creating credentials" << endl;
-
     login(username, password);
-
-    string sql_credentials("INSERT INTO credentials (1, 'main', username,password) VALUES(?, ?, ?, ?);");
+    cout << "username " << username << endl;
+    cout << "password " << password << endl;
+    string sql_credentials("INSERT INTO credentials (ID, TABLE_NAME, USERNAME, PASSWORD) VALUES(?, ?, ?, ?);");
     sqlite3_stmt* stmt;
 
     exit = sqlite3_prepare_v2(db, sql_credentials.c_str(), -1, &stmt, nullptr);
@@ -234,37 +257,24 @@ void create_credentials_to_db() {
 int main () {
     int result, check_login, db_check, db_credentials;
     string login_username, login_password;
-    // sqlite3* DB;
+    string username, password;
 
-    // int exit = sqlite3_open("passwords_db", &DB);
-    // if (exit =! SQLITE_OK) {
-    //     cerr << "Error opening SQLITE3 DB: " << sqlite3_errmsg(DB) <<endl;
-    // }
-    
-    
-    db_check = sqlite_data_base_creation();
-
-    if (db_check != 0) {
-        cerr << "ERROR in database creation" << endl;
-        return -1;
-    }
-
-    cout << "password manager" << endl;
-    for (int i=0; i < 2; i++){
-        db_credentials = check_credentials_from_database();
-        if (db_credentials == 1) {
-            continue;
-        }
-        else {
-            break;
+    for (int i = 0; i < 2; i++) {
+        bool found = check_credentials_from_database(username, password);
+        if (!found) {
+            cout << "Credentials not found, creating new..." << endl;
+            create_credentials_to_db();
+            continue;  // try again
+        } else {
+            break;  // exit the loop, credentials found
         }
     }
-    login(login_username, login_password);
+    // login(login_username, login_password);
 
-    cout << "given username: " << login_username << endl;
-    cout << "given password: " << login_password << endl;
+    cout << "given username: " << username << endl;
+    cout << "given password: " << password << endl;
 
-    check_login = check_credentials(login_username, login_password);
+    check_login = check_credentials(username, password);
     if (check_login == 1) {
         int action;
         cout << "What would you like to do" << endl;
