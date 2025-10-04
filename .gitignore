@@ -9,5 +9,5 @@
 *.obj
 *.out
 
-# 📦 Optional: VS Code config
+# VS Code config
 .vscode/
