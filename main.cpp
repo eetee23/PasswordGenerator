@@ -23,8 +23,15 @@ void login (string &login_username, string &login_password) {
 
 int check_credentials(string username, string password) {
     int result = 0;
+    string login_username, login_password;
 
-    if (username == "user" && password == "pass12!") {
+    cout << "Enter username: ";
+    cin >> login_username;
+
+    cout << "Enter password: ";
+    cin >> login_password;
+
+    if (username == login_username && password == login_password) {
         result = 1;
         cout << "correct credentials" << endl;
         return result;
@@ -264,16 +271,12 @@ int main () {
         if (!found) {
             cout << "Credentials not found, creating new..." << endl;
             create_credentials_to_db();
-            continue;  // try again
+            continue;
         } else {
-            break;  // exit the loop, credentials found
+            break;
         }
     }
-    // login(login_username, login_password);
-
-    cout << "given username: " << username << endl;
-    cout << "given password: " << password << endl;
-
+    cout << "Login to password manager" << endl;
     check_login = check_credentials(username, password);
     if (check_login == 1) {
         int action;
