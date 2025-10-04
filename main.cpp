@@ -11,6 +11,7 @@ using namespace std;
 
 // prototype
 void create_credentials_to_db();
+int callback(void* data, int argc, char** argv, char** azColName);
 
 void login (string &login_username, string &login_password) {
     
@@ -86,6 +87,65 @@ void copy_to_clipboard(const string& random_password) {
     }
 }
 
+bool add_new_password_to_database(string tag, string random_password) {
+    sqlite3* db;
+    vector<map<string, string>> result_rows;
+
+    int exit = sqlite3_open("passwords.db", &db);
+
+    if (exit != SQLITE_OK) {
+        cerr << "Can't open database: " << sqlite3_errmsg(db) << endl;
+        return false;
+    }
+
+    string sql_select("SELECT * FROM PASSWORDS;");
+    char* message_error;
+    exit = sqlite3_exec(db, sql_select.c_str(), callback, &result_rows, &message_error);
+
+    if (exit != SQLITE_OK) {
+        cerr << "ERROR in password table select: " << (message_error ? message_error : "Unknown error") << endl;
+        sqlite3_free(message_error);
+        sqlite3_close(db);
+        message_error = nullptr;
+        return false;
+    }
+    int id;
+    if (result_rows.empty()) {
+        id = 0;
+    } else {
+        int max_id = 0;
+        for (const auto& row : result_rows) {
+            auto it = row.find("ID");
+            if (it != row.end()) {
+                try {
+                    int current_id = stoi(it->second);
+                    if (current_id > max_id) {
+                        max_id = current_id;
+                    }
+                } catch (const invalid_argument& e) {
+                    cerr << "Invalid ID value in database row: " << it->second << endl;
+                } catch (const out_of_range& e) {
+                    cerr << "Out-of-range ID value in database row: " << it->second << endl;
+                }
+            }
+        }
+        id = max_id + 1; 
+    }
+
+    cout << "id" << id << endl;
+
+    string sql_password("INSERT INTO PASSWORDS (ID, NAME, PASSWORD) VALUES(?, ?, ?)");
+    sqlite3_stmt* stmt;
+
+    exit = sqlite3_prepare_v2(db, sql_password.c_str(), -1, &stmt, nullptr);
+
+    if (exit != SQLITE_OK) {
+        cerr << "Failed to prepare insert statement" << sqlite3_errmsg(db) << endl;
+        sqlite3_close(db);
+        return false;
+    }
+}
+
 void new_password() {
     string random_password, tag;
     pair<string, string> np;
@@ -93,8 +153,13 @@ void new_password() {
     np = generate_new_password();
     tag = np.first;
     random_password = np.second;
+    bool result = add_new_password_to_database(tag, random_password);
     cout << "new password created under tag " << tag << endl;
-    copy_to_clipboard(random_password);
+    if (result == 0) { 
+        copy_to_clipboard(random_password);
+    } else {
+        cerr << "New password generation failed" << endl;
+    }
 }
 
 int sqlite_data_base_creation() {
