@@ -4,13 +4,44 @@
 #include "string"
 #include "vector"
 #include "map"
+
+#ifdef _WIN32
 #include <windows.h>
+#else
+#include <cstdlib>
+#endif
+
 #include <sqlite3.h>
 
 using namespace std;
 
 // prototype
 void create_credentials_to_db();
+
+void copy_to_clipboard(const string& random_password) {
+#ifdef _WIN32
+    const size_t lrp = random_password.length() + 1;
+    HGLOBAL hMem = GlobalAlloc(GMEM_MOVEABLE, lrp);
+    if (!hMem) {
+        cout << "Failed to allocate memory for coping" << endl;
+        return;
+    }
+    memcpy(GlobalLock(hMem), random_password.c_str(), lrp);
+    GlobalUnlock(hMem);
+
+    if (OpenClipboard(0)) {
+        EmptyClipboard();
+        SetClipboardData(CF_TEXT, hMem);
+        CloseClipboard();
+        cout << "new password copied to clip board" << endl;
+    } else {
+        cout << "Failed to open clipbroad" << endl;
+        GlobalFree(hMem);
+    }
+#else
+    string cmd = "echo \"" + random_password + "\" | xclip -selection clipboard";
+#endif
+}
 
 void login (string &login_username, string &login_password) {
     
@@ -63,27 +94,6 @@ pair<string, string> generate_new_password(){
     }
 
     return make_pair(password_tag, random_string);
-}
-
-void copy_to_clipboard(const string& random_password) {
-    const size_t lrp = random_password.length() + 1;
-    HGLOBAL hMem = GlobalAlloc(GMEM_MOVEABLE, lrp);
-    if (!hMem) {
-        cout << "Failed to allocate memory for coping" << endl;
-        return;
-    }
-    memcpy(GlobalLock(hMem), random_password.c_str(), lrp);
-    GlobalUnlock(hMem);
-
-    if (OpenClipboard(0)) {
-        EmptyClipboard();
-        SetClipboardData(CF_TEXT, hMem);
-        CloseClipboard();
-        cout << "new password copied to clip board" << endl;
-    } else {
-        cout << "Failed to open clipbroad" << endl;
-        GlobalFree(hMem);
-    }
 }
 
 void new_password() {
