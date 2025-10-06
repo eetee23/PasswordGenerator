@@ -9,5 +9,9 @@
 *.obj
 *.out
 
-# 📦 Optional: VS Code config
+# VS Code config
 .vscode/
+
+# Files inside database directory
+database/*
+!database/

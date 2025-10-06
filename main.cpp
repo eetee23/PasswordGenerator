@@ -110,7 +110,7 @@ void new_password() {
 int sqlite_data_base_creation() {
     sqlite3* db;
 
-    int exit = sqlite3_open("passwords.db", &db);
+    int exit = sqlite3_open("database/passwords.db", &db);
 
     if (exit != SQLITE_OK) {
         cerr << "Can't open database: " << sqlite3_errmsg(db) << endl;
@@ -118,26 +118,26 @@ int sqlite_data_base_creation() {
     } else {
         cout << "Opened SQLite database successfully!\n";
     }
-    string db_password_table =  "CREATE TABLE IF NOT EXISTS PASSWORDS(ID INT PRIMARY KEY NOT NULL," \
+    string db_password_table =  "CREATE TABLE IF NOT EXISTS PASSWORDS(ID INTEGER PRIMARY KEY NOT NULL," \
                                 "NAME STRING NOT NULL," \
                                 "PASSWORD STRING NOT NULL)";
     char* message_error;
     exit = sqlite3_exec(db, db_password_table.c_str(), NULL, 0, &message_error);
     if (exit != SQLITE_OK) {
-        cerr << "ERROR in Creating password table" << endl;
+        cerr << "ERROR in Creating password table: " << message_error << endl;
         sqlite3_free(message_error);
         message_error = nullptr;
         return 1;
     } else{
         cout << "Password table was successfully created" << endl;
     }
-    string db_user_credentials_table =  "CREATE TABLE IF NOT EXISTS CREDENTIALS(ID INT PRIMARY KEY NOT NULL," \
-                                        "TABLE_NAME STRING NOT NULL," \
-                                        "USERNAME STRING NOT NULL," \
-                                        "PASSWORD STRING NOT NULL)";
+    string db_user_credentials_table =  "CREATE TABLE IF NOT EXISTS CREDENTIALS(ID INTEGER PRIMARY KEY AUTOINCREMENT," \
+                                        "TABLE_NAME TEXT NOT NULL," \
+                                        "USERNAME TEXT NOT NULL," \
+                                        "PASSWORD TEXT NOT NULL);";
     exit = sqlite3_exec(db, db_user_credentials_table.c_str(), NULL, 0, &message_error);
     if (exit != SQLITE_OK) {
-        cerr << "ERROR in Creating credentials table" << endl;
+        cerr << "ERROR in Creating credentials table: " << message_error << endl;
         sqlite3_free(message_error);
         message_error = nullptr;
         return 1;
@@ -174,7 +174,7 @@ bool check_credentials_from_database(string& out_username, string& out_password)
     sqlite3* db;
     vector<map<string, string>> result_rows;
 
-    int exit = sqlite3_open("passwords.db", &db);
+    int exit = sqlite3_open("database/passwords.db", &db);
     
     if (exit != SQLITE_OK) {
         cerr << "ERROR opening database for credential check" << sqlite3_errmsg(db) << endl;
@@ -196,7 +196,6 @@ bool check_credentials_from_database(string& out_username, string& out_password)
 
     if (result_rows.empty()) {
         cout << "password is empty" << endl;
-        create_credentials_to_db();    
         return false;
     }
 
@@ -221,7 +220,7 @@ void create_credentials_to_db() {
 
     cout << "creating credentials" << endl;
 
-    int exit = sqlite3_open("passwords.db", &db);
+    int exit = sqlite3_open("database/passwords.db", &db);
 
     if (exit != SQLITE_OK) {
         cerr << "ERROR opening database for  creating credentials" << sqlite3_errmsg(db) << endl;
@@ -233,7 +232,7 @@ void create_credentials_to_db() {
     login(username, password);
     cout << "username " << username << endl;
     cout << "password " << password << endl;
-    string sql_credentials("INSERT INTO credentials (ID, TABLE_NAME, USERNAME, PASSWORD) VALUES(?, ?, ?, ?);");
+    string sql_credentials("INSERT INTO credentials (TABLE_NAME, USERNAME, PASSWORD) VALUES(?, ?, ?);");
     sqlite3_stmt* stmt;
 
     exit = sqlite3_prepare_v2(db, sql_credentials.c_str(), -1, &stmt, nullptr);
@@ -244,10 +243,9 @@ void create_credentials_to_db() {
         return;
     }
 
-    sqlite3_bind_int(stmt, 1, 1);
-    sqlite3_bind_text(stmt, 2, "main", -1, SQLITE_STATIC);
-    sqlite3_bind_text(stmt, 3, username.c_str(), -1, SQLITE_TRANSIENT);
-    sqlite3_bind_text(stmt, 4, password.c_str(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_text(stmt, 1, "main", -1, SQLITE_STATIC);
+    sqlite3_bind_text(stmt, 2, username.c_str(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_text(stmt, 3, password.c_str(), -1, SQLITE_TRANSIENT);
 
     exit = sqlite3_step(stmt);
 
@@ -272,9 +270,14 @@ void create_credentials_to_db() {
 // }
 
 int main () {
-    int result, check_login, db_check, db_credentials;
+    int result, check_login, db_check, db_credentials, start;
     string login_username, login_password;
     string username, password;
+
+    start = sqlite_data_base_creation();
+    if (start != 0) {
+        return 0;
+    }
 
     for (int i = 0; i < 2; i++) {
         bool found = check_credentials_from_database(username, password);
