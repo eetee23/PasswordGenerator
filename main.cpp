@@ -110,7 +110,7 @@ void new_password() {
 int sqlite_data_base_creation() {
     sqlite3* db;
 
-    int exit = sqlite3_open("passwords.db", &db);
+    int exit = sqlite3_open("database/passwords.db", &db);
 
     if (exit != SQLITE_OK) {
         cerr << "Can't open database: " << sqlite3_errmsg(db) << endl;
@@ -174,7 +174,7 @@ bool check_credentials_from_database(string& out_username, string& out_password)
     sqlite3* db;
     vector<map<string, string>> result_rows;
 
-    int exit = sqlite3_open("passwords.db", &db);
+    int exit = sqlite3_open("database/passwords.db", &db);
     
     if (exit != SQLITE_OK) {
         cerr << "ERROR opening database for credential check" << sqlite3_errmsg(db) << endl;
@@ -220,7 +220,7 @@ void create_credentials_to_db() {
 
     cout << "creating credentials" << endl;
 
-    int exit = sqlite3_open("passwords.db", &db);
+    int exit = sqlite3_open("database/passwords.db", &db);
 
     if (exit != SQLITE_OK) {
         cerr << "ERROR opening database for  creating credentials" << sqlite3_errmsg(db) << endl;
