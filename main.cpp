@@ -43,6 +43,49 @@ void copy_to_clipboard(const string& random_password) {
 #endif
 }
 
+bool search_by_id(string input) {
+    sqlite3* db;
+    char message_error;
+    int id = stoi(input);
+    int exit = sqlite3_open("database/passwords.db", &db);
+
+    if (exit != SQLITE_OK) {
+        cerr << "ERROR opening database for password id search" << sqlite3_errmsg(db) << endl;
+    }
+
+    string check_by_id = "SELECT * FROM passwords WHERE ID = ?;";
+    sqlite3_stmt* stmt;
+    
+    exit = sqlite3_prepare_v2(db, check_by_id.c_str(), -1, &stmt, nullptr);
+
+    if (exit != SQLITE_OK) {
+        cerr << "Failed to prepare select statement" << sqlite3_errmsg(db) << endl;
+        sqlite3_close(db);
+        return false;
+    }
+
+    sqlite3_bind_int(stmt, 1, id);
+
+    exit = sqlite3_step(stmt);
+
+    if (exit == SQLITE_ROW) {
+        int fetched_id = sqlite3_column_int(stmt, 0);
+        const unsigned char* name = sqlite3_column_text(stmt, 1);
+        const unsigned char* password = sqlite3_column_text(stmt, 2);
+
+        cout << "id: " << fetched_id << " name: " << name << " password: " << password << endl;
+    } else {
+        cerr << "ERROR in selecting password: " << sqlite3_errmsg(db) << endl;
+        sqlite3_finalize(stmt);
+        sqlite3_close(db);
+        return false;
+    }
+
+    sqlite3_finalize(stmt);
+    sqlite3_close(db);
+    return true;
+}
+
 void login (string &login_username, string &login_password) {
     cout << "Enter username: ";
     cin >> login_username;
@@ -304,9 +347,31 @@ void create_credentials_to_db() {
     sqlite3_close(db);
 }
 
-// int get_password() {
+void get_password() {
+    string search_input;
+    bool str_value = true;
 
-// }
+    cout << "Input password id or name: ";
+    cin >> search_input;
+
+    for (char ch : search_input) {
+        if (!(ch >= 48 && ch <= 57)) {
+            str_value = false;
+            break;
+        }
+    }
+
+    if (str_value == true) {
+        bool result;
+        result = search_by_id(search_input);
+        // if (result == false) {
+        //     search_by_name();
+        // }
+    } 
+    // else {
+    //     // search_by_name(search_input);
+    // }
+}
 
 void browse_passwords() {
     sqlite3* db;
@@ -381,13 +446,13 @@ int main () {
         cin >> action;
         switch(action) {
             case 1:
-                // get_password()
+                get_password();
             case 2:
                 browse_passwords();
             case 3:
                 new_password();
             case 4:
-                // Delete password by name
+                // Delete password by id or name
             default:
                 cout << "Invalid action given: " << action << endl;
         }
