@@ -15,3 +15,6 @@
 # Files inside database directory
 database/*
 !database/
+
+# ENV file
+.env

@@ -44,7 +44,6 @@ void copy_to_clipboard(const string& random_password) {
 }
 
 void login (string &login_username, string &login_password) {
-    
     cout << "Enter username: ";
     cin >> login_username;
 
@@ -96,15 +95,59 @@ pair<string, string> generate_new_password(){
     return make_pair(password_tag, random_string);
 }
 
+bool add_password_to_database(string tag, string password) {
+    sqlite3* db;
+
+    int exit = sqlite3_open("database/passwords.db", &db);
+
+    if (exit != SQLITE_OK) {
+        cerr << "ERROR opening database for credential check" << sqlite3_errmsg(db) << endl;
+        return false;
+    }
+
+    string password_insert ("INSERT INTO PASSWORDS (NAME, PASSWORD) VALUES(?, ?);");
+    sqlite3_stmt* stmt;
+
+    exit = sqlite3_prepare_v2(db, password_insert.c_str(), -1, &stmt, nullptr);
+
+    if (exit != SQLITE_OK) {
+        cerr << "Failed to prepare insert statement" << sqlite3_errmsg(db) << endl;
+        sqlite3_close(db);
+        return false;
+    }
+
+    sqlite3_bind_text(stmt, 1, tag.c_str(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_text(stmt, 2, password.c_str(), -1, SQLITE_TRANSIENT);
+
+    exit = sqlite3_step(stmt);
+
+    if (exit != SQLITE_DONE) {
+        cerr << "ERROR in new password insert: " << sqlite3_errmsg(db) << endl;
+        sqlite3_finalize(stmt);
+        sqlite3_close(db);
+        return false;
+    }
+
+    sqlite3_finalize(stmt);
+    sqlite3_close(db);
+    return true;
+}
+
 void new_password() {
-    string random_password, tag;
+    string password, tag;
     pair<string, string> np;
+    bool db_add;
 
     np = generate_new_password();
     tag = np.first;
-    random_password = np.second;
-    cout << "new password created under tag " << tag << endl;
-    copy_to_clipboard(random_password);
+    password = np.second;
+    db_add = add_password_to_database(tag, password);
+    if (db_add == true) {
+        cout << "new password created under tag " << tag << endl;
+        copy_to_clipboard(password);
+    } else {
+        cout << "Failed to generate password for " << tag << endl;
+    }
 }
 
 int sqlite_data_base_creation() {
@@ -118,7 +161,7 @@ int sqlite_data_base_creation() {
     } else {
         cout << "Opened SQLite database successfully!\n";
     }
-    string db_password_table =  "CREATE TABLE IF NOT EXISTS PASSWORDS(ID INTEGER PRIMARY KEY NOT NULL," \
+    string db_password_table =  "CREATE TABLE IF NOT EXISTS PASSWORDS(ID INTEGER PRIMARY KEY AUTOINCREMENT," \
                                 "NAME STRING NOT NULL," \
                                 "PASSWORD STRING NOT NULL)";
     char* message_error;
@@ -175,7 +218,7 @@ bool check_credentials_from_database(string& out_username, string& out_password)
     vector<map<string, string>> result_rows;
 
     int exit = sqlite3_open("database/passwords.db", &db);
-    
+
     if (exit != SQLITE_OK) {
         cerr << "ERROR opening database for credential check" << sqlite3_errmsg(db) << endl;
         return false;
@@ -195,7 +238,7 @@ bool check_credentials_from_database(string& out_username, string& out_password)
     sqlite3_close(db);
 
     if (result_rows.empty()) {
-        cout << "password is empty" << endl;
+        cout << "creadentials is empty" << endl;
         return false;
     }
 
@@ -265,9 +308,45 @@ void create_credentials_to_db() {
 
 // }
 
-// int browse_password() {
+void browse_passwords() {
+    sqlite3* db;
+    char* message_error;
+    vector<map<string, string>> result_rows;
 
-// }
+    int exit = sqlite3_open("database/passwords.db", &db);
+
+    if (exit != SQLITE_OK) {
+        cerr << "ERROR opening database for browsing passwords" << sqlite3_errmsg(db) << endl;
+        return;
+    }
+
+    string get_passwords = "SELECT * from passwords;";
+
+    exit = sqlite3_exec(db, get_passwords.c_str(), callback, &result_rows, &message_error);
+
+    if (exit != SQLITE_OK) {
+        cerr << "ERROR in selecting from passwords table" << message_error << endl;
+        sqlite3_free(message_error);
+        sqlite3_close(db);
+        return;
+    }
+
+    sqlite3_close(db);
+
+    if (result_rows.empty()) {
+        cout << "Password storage is empty" << endl;
+        return;
+    }
+
+    for (const auto& row : result_rows) {
+        auto id = row.find("ID");
+        auto tag = row.find("NAME");
+        if (id != row.end() && tag != row.end()) {
+            cout << id->second << ": " << tag->second << endl;
+        }
+    }
+    return;
+}
 
 int main () {
     int result, check_login, db_check, db_credentials, start;
@@ -294,18 +373,21 @@ int main () {
     if (check_login == 1) {
         int action;
         cout << "What would you like to do" << endl;
-        cout << "1. Get old password by name" << endl;
+        cout << "1. Get password by id or name" << endl;
         cout << "2. Browse passwords" << endl;
         cout << "3. Generate passwords" << endl;
+        cout << "4. Delete password by name" << endl;
         cout << "Input number for the action you would like to do: ";
         cin >> action;
         switch(action) {
             case 1:
-                // get_password()                
+                // get_password()
             case 2:
-                // browse_password()
+                browse_passwords();
             case 3:
                 new_password();
+            case 4:
+                // Delete password by name
             default:
                 cout << "Invalid action given: " << action << endl;
         }
