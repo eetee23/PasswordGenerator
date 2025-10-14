@@ -44,7 +44,6 @@ void copy_to_clipboard(const string& random_password) {
 }
 
 void login (string &login_username, string &login_password) {
-    
     cout << "Enter username: ";
     cin >> login_username;
 
@@ -96,15 +95,56 @@ pair<string, string> generate_new_password(){
     return make_pair(password_tag, random_string);
 }
 
+bool add_password_to_database(string tag, string password) {
+    sqlite3* db;
+
+    int exit = sqlite3_open("passwords.db", &db);
+
+    if (exit != SQLITE_OK) {
+        cerr << "ERROR opening database for credential check" << sqlite3_errmsg(db) << endl;
+        return false;
+    }
+
+    string password_insert ("INSERT INTO PASSWORDS (NAME, PASSWORD) VALUES(?, ?);");
+    sqlite3_stmt* stmt;
+
+    exit = sqlite3_prepare_v2(db, password_insert.c_str(), -1, &stmt, nullptr);
+
+    if (exit != SQLITE_OK) {
+        cerr << "Failed to prepare insert statement" << sqlite3_errmsg(db) << endl;
+        sqlite3_close(db);
+        return false;
+    }
+
+    sqlite3_bind_text(stmt, 1, tag.c_str(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_text(stmt, 2, password.c_str(), -1, SQLITE_TRANSIENT);
+
+    sqlite3_step(stmt);
+
+    if (exit != SQLITE_DONE) {
+        cerr << "New password insert ERROR" << sqlite3_errmsg(db) << endl;
+    }
+
+    sqlite3_finalize(stmt);
+    sqlite3_close(db);
+    return true;
+}
+
 void new_password() {
-    string random_password, tag;
+    string password, tag;
     pair<string, string> np;
+    bool db_add;
 
     np = generate_new_password();
     tag = np.first;
-    random_password = np.second;
-    cout << "new password created under tag " << tag << endl;
-    copy_to_clipboard(random_password);
+    password = np.second;
+    db_add = add_password_to_database(tag, password);
+    if (db_add == true) {
+        cout << "new password created under tag " << tag << endl;
+        copy_to_clipboard(password);
+    } else {
+        cout << "Failed to generate password for " << tag << endl;
+    }
 }
 
 int sqlite_data_base_creation() {
@@ -118,7 +158,7 @@ int sqlite_data_base_creation() {
     } else {
         cout << "Opened SQLite database successfully!\n";
     }
-    string db_password_table =  "CREATE TABLE IF NOT EXISTS PASSWORDS(ID INTEGER PRIMARY KEY NOT NULL," \
+    string db_password_table =  "CREATE TABLE IF NOT EXISTS PASSWORDS(ID INTEGER PRIMARY KEY AUTOINCREMENT," \
                                 "NAME STRING NOT NULL," \
                                 "PASSWORD STRING NOT NULL)";
     char* message_error;
@@ -175,7 +215,7 @@ bool check_credentials_from_database(string& out_username, string& out_password)
     vector<map<string, string>> result_rows;
 
     int exit = sqlite3_open("database/passwords.db", &db);
-    
+
     if (exit != SQLITE_OK) {
         cerr << "ERROR opening database for credential check" << sqlite3_errmsg(db) << endl;
         return false;
@@ -301,7 +341,7 @@ int main () {
         cin >> action;
         switch(action) {
             case 1:
-                // get_password()                
+                // get_password()
             case 2:
                 // browse_password()
             case 3:
