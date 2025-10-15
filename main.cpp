@@ -19,31 +19,31 @@ using namespace std;
 void create_credentials_to_db();
 
 void copy_to_clipboard(const string& random_password) {
-#ifdef _WIN32
-    const size_t lrp = random_password.length() + 1;
-    HGLOBAL hMem = GlobalAlloc(GMEM_MOVEABLE, lrp);
-    if (!hMem) {
-        cout << "Failed to allocate memory for coping" << endl;
-        return;
-    }
-    memcpy(GlobalLock(hMem), random_password.c_str(), lrp);
-    GlobalUnlock(hMem);
+    #ifdef _WIN32
+        const size_t lrp = random_password.length() + 1;
+        HGLOBAL hMem = GlobalAlloc(GMEM_MOVEABLE, lrp);
+        if (!hMem) {
+            cout << "Failed to allocate memory for coping" << endl;
+            return;
+        }
+        memcpy(GlobalLock(hMem), random_password.c_str(), lrp);
+        GlobalUnlock(hMem);
 
-    if (OpenClipboard(0)) {
-        EmptyClipboard();
-        SetClipboardData(CF_TEXT, hMem);
-        CloseClipboard();
-        cout << "new password copied to clip board" << endl;
-    } else {
-        cout << "Failed to open clipbroad" << endl;
-        GlobalFree(hMem);
-    }
-#else
-    string cmd = "echo \"" + random_password + "\" | xclip -selection clipboard";
-#endif
+        if (OpenClipboard(0)) {
+            EmptyClipboard();
+            SetClipboardData(CF_TEXT, hMem);
+            CloseClipboard();
+            cout << "Password copied to clip board" << endl;
+        } else {
+            cout << "Failed to open clipbroad" << endl;
+            GlobalFree(hMem);
+        }
+    #else
+        string cmd = "echo \"" + random_password + "\" | xclip -selection clipboard";
+    #endif
 }
 
-bool search_by_id(string input) {
+void search_by_id(string input) {
     sqlite3* db;
     char message_error;
     int id = stoi(input);
@@ -61,7 +61,7 @@ bool search_by_id(string input) {
     if (exit != SQLITE_OK) {
         cerr << "Failed to prepare select statement" << sqlite3_errmsg(db) << endl;
         sqlite3_close(db);
-        return false;
+        return;
     }
 
     sqlite3_bind_int(stmt, 1, id);
@@ -78,12 +78,12 @@ bool search_by_id(string input) {
         cerr << "ERROR in selecting password: " << sqlite3_errmsg(db) << endl;
         sqlite3_finalize(stmt);
         sqlite3_close(db);
-        return false;
+        return;
     }
 
     sqlite3_finalize(stmt);
     sqlite3_close(db);
-    return true;
+    return;
 }
 
 void login (string &login_username, string &login_password) {
@@ -92,6 +92,86 @@ void login (string &login_username, string &login_password) {
 
     cout << "Enter passsword: ";
     cin >> login_password;
+}
+
+void search_by_name(string input) {
+    sqlite3* db;
+    char message_error;
+    int exit = sqlite3_open("database/passwords.db", &db);
+
+    if (exit != SQLITE_OK) {
+        cerr << "ERROR opening database for password name search" << sqlite3_errmsg(db) << endl;
+    }
+
+    string check_by_id = "SELECT * FROM passwords WHERE NAME = ?;";
+    sqlite3_stmt* stmt;
+    
+    exit = sqlite3_prepare_v2(db, check_by_id.c_str(), -1, &stmt, nullptr);
+
+    if (exit != SQLITE_OK) {
+        cerr << "Failed to prepare select statement" << sqlite3_errmsg(db) << endl;
+        sqlite3_close(db);
+        return;
+    }
+
+    sqlite3_bind_text(stmt, 1, input.c_str(), -1, SQLITE_TRANSIENT);
+
+    vector<map<string, string>> all_rows;
+    map<string,string> row;
+
+    for(int i = 0; i < 99; i++) {
+        exit = sqlite3_step(stmt);
+        if (exit == SQLITE_ROW) {
+            int fetched_id = sqlite3_column_int(stmt, 0);
+            const unsigned char* name = sqlite3_column_text(stmt, 1);
+            const unsigned char* password = sqlite3_column_text(stmt, 2);
+
+            row.clear();
+            row["id"] = to_string(fetched_id);
+            row["name"] = name ? reinterpret_cast<const char*>(name): "";
+            row["password"] = password ? reinterpret_cast<const char*>(password): "";
+            all_rows.push_back(row);
+
+            cout << "id: " << fetched_id << " name: " << name << endl;
+        } else if (exit == SQLITE_DONE) {
+            if (i == 0) {
+                cout << "Password name now found" << endl;
+            }
+            else if (i > 1) {
+                int id;
+                cout << "Give id of the password you would like to copy: ";
+                cin >> id;
+                
+                for (const auto& result_row : all_rows) {
+                    auto id_check_row = result_row.find("id");
+                    if (id_check_row != result_row.end()) {
+                        int id_check = stoi(id_check_row->second);
+                        if (id == id_check) {
+                            auto id_pw_row = result_row.find("password");
+                            string pw = id_pw_row->second;
+                            copy_to_clipboard(pw);
+                            break;
+                        }
+                    }
+                }
+            } else {
+                auto pw_check = row.find("password");
+                if (pw_check != row.end()) {
+                    string pw = pw_check->second;
+                    copy_to_clipboard(pw);
+                } 
+            }
+            break;
+        }else {
+            cerr << "ERROR in selecting password: " << sqlite3_errmsg(db) << endl;
+            sqlite3_finalize(stmt);
+            sqlite3_close(db);
+            return;
+        }
+    }
+    sqlite3_finalize(stmt);
+    sqlite3_close(db);
+    return;
 }
 
 int check_credentials(string username, string password) {
@@ -349,28 +429,23 @@ void create_credentials_to_db() {
 
 void get_password() {
     string search_input;
-    bool str_value = true;
+    bool str_value = false;
 
     cout << "Input password id or name: ";
     cin >> search_input;
 
     for (char ch : search_input) {
         if (!(ch >= 48 && ch <= 57)) {
-            str_value = false;
+            str_value = true;
             break;
         }
     }
 
-    if (str_value == true) {
-        bool result;
-        result = search_by_id(search_input);
-        // if (result == false) {
-        //     search_by_name();
-        // }
-    } 
-    // else {
-    //     // search_by_name(search_input);
-    // }
+    if (str_value != true) {
+        search_by_id(search_input);
+     } else {
+        search_by_name(search_input);
+    }
 }
 
 void browse_passwords() {
