@@ -78,7 +78,7 @@ map<string, string> search_by_id(string input) {
         cout << "id: " << fetched_id << " name: " << name << endl;
 
 
-        result["id"] = fetched_id;
+        result["id"] = to_string(fetched_id);
         result["name"] = name ? reinterpret_cast<const char*>(name): "";
         result["password"] = password ? reinterpret_cast<const char*>(password): "";
     } else {
@@ -127,7 +127,7 @@ map<string, string> search_by_name(string input) {
     map<string,string> row;
     map<string,string> result;
 
-    for(int i = 0; i < 99; i++) {
+    for (int i = 0; i < 99; i++) {
         exit = sqlite3_step(stmt);
         if (exit == SQLITE_ROW) {
             int fetched_id = sqlite3_column_int(stmt, 0);
@@ -565,6 +565,91 @@ void browse_passwords() {
     return;
 }
 
+map<string, string>edit_entry_fields(map<string, string> entry) {
+    auto id_entry = entry.find("id");
+    auto name_entry = entry.find("name");
+    auto password_entry = entry.find("password");
+    string entry_value;
+    map<string, string> result = {};
+    for (int i = 0; i < 99; i++) {
+        int input;
+        string user_input;
+
+        cout << "1. Name" << endl;
+        cout << "2. Password" << endl;
+        cout << "3. Close" << endl;
+        cout << "Enter number for what you would like to edit: ";
+        cin >> input;
+
+        switch(input) {
+            case 1:
+                if (result.find("id") == result.end()) {
+                    cout << "id: " << id_entry->second << endl;
+                    string id_value = id_entry->second;
+                    result["id"] = id_value;
+                }
+                if (result.find("name") != result.end()) {
+                    cout << "Current name: " << result["name"] << endl;
+                    cout << "Enter new name: ";
+                    cin >> user_input;
+                    result["name"] = user_input;
+                } else {
+                    entry_value = name_entry->second;
+                    cout << "Current name: " << entry_value << endl;
+                    cout << "Enter new name: ";
+                    cin >> user_input;
+                    result["name"] = user_input;
+                }
+                break;
+            case 2:
+                if (result.find("id") == result.end()) {
+                    string id_value = id_entry->second;
+                    result["id"] = id_value;
+                }
+                if (result.find("password") != result.end()) {
+                    cout << "Current password: " << result["password"] << endl;
+                    cout << "Enter new password: ";
+                    cin >> user_input;
+                    result["password"] = user_input;
+                } else {
+                    entry_value = password_entry->second;
+                    cout << "Current password " << entry_value << endl;
+                    cout << "Enter new password: ";
+                    cin >> user_input;
+                    result["password"] = user_input;
+                }
+                break;
+            case 3:
+                i = 99;
+                break;
+        }
+    }
+    return result;
+}
+
+void edit_entry() {
+    string input;
+    bool val_string = false;
+    map<string, string> search_result, edited_entry;
+
+    cout << "Enter id or name for the password you would like to edit: ";
+    cin >> input;
+
+    for (char ch : input) {
+        if (!(ch >= 48 && ch <= 57)) {
+            val_string = true;
+            break;
+        }
+    }
+
+    if (!val_string) {
+        search_result = search_by_id(input);
+        if (!search_result.empty()) {
+            edited_entry = edit_entry_fields(search_result);
+        }
+    }
+}
+
 int main () {
     int result, check_login, db_check, db_credentials, start;
     string login_username, login_password;
@@ -593,7 +678,8 @@ int main () {
         cout << "1. Get password by id or name" << endl;
         cout << "2. Browse passwords" << endl;
         cout << "3. Generate passwords" << endl;
-        cout << "4. Delete password by name" << endl;
+        cout << "4. Edit password entry" << endl;
+        cout << "5. Delete password by name" << endl;
         cout << "Input number for the action you would like to do: ";
         cin >> action;
         switch(action) {
@@ -604,6 +690,8 @@ int main () {
             case 3:
                 new_password();
             case 4:
+                edit_entry();
+            case 5:
                 delete_password();
             default:
                 cout << "Invalid action given: " << action << endl;
