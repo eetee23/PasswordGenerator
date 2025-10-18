@@ -565,6 +565,58 @@ void browse_passwords() {
     return;
 }
 
+void edit_db_entry(map<string, string> entry) {
+    sqlite3* db;
+    
+    int exit = sqlite3_open("database/passwords.db", &db);
+
+    if(exit != SQLITE_OK) {
+        cerr << "ERROR opening database for entry editing" << sqlite3_errmsg(db) << endl;
+        return;
+    }
+
+    for (const auto& pair : entry) {
+        cout << "key: " << pair.first << " value: " << pair.second << endl; 
+    }
+
+    auto id_entry = entry.find("id");
+    auto name_entry = entry.find("name");
+    auto password_entry = entry.find("password");
+
+    int id = stoi(id_entry->second);
+    entry.erase(id_entry);
+
+    sqlite3_stmt* stmt;    
+    for (const auto& pair : entry) {
+        string key = pair.first;
+        string value = pair.second;
+
+        string edit_entry = "UPDATE passwords SET "+ key +" = ? WHERE ID = ?;";
+
+        exit = sqlite3_prepare(db, edit_entry.c_str(), -1, &stmt, nullptr);
+
+        if (exit != SQLITE_OK) {
+            cerr << "Failed to prepare UPDATE statement " << sqlite3_errmsg(db) << endl;
+            sqlite3_close(db);
+            return;
+        }
+    
+        sqlite3_bind_text(stmt, 1, value.c_str(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_int(stmt, 2, id);
+
+        exit = sqlite3_step(stmt);
+
+        if (exit != SQLITE_DONE) {
+            cerr << "Entry editing FAILED try again " << sqlite3_errmsg(db) << endl;
+            sqlite3_finalize(stmt);
+            break;
+        }
+        sqlite3_finalize(stmt);
+    }
+    sqlite3_close(db);
+    return;
+}
+
 map<string, string>edit_entry_fields(map<string, string> entry) {
     auto id_entry = entry.find("id");
     auto name_entry = entry.find("name");
@@ -646,6 +698,9 @@ void edit_entry() {
         search_result = search_by_id(input);
         if (!search_result.empty()) {
             edited_entry = edit_entry_fields(search_result);
+            if (!edited_entry.empty()) {
+                edit_db_entry(edited_entry);
+            }
         }
     }
 }
