@@ -729,29 +729,43 @@ int main () {
     check_login = check_credentials(username, password);
     if (check_login == 1) {
         int action;
-        cout << "What would you like to do" << endl;
-        cout << "1. Get password by id or name" << endl;
-        cout << "2. Browse passwords" << endl;
-        cout << "3. Generate passwords" << endl;
-        cout << "4. Edit password entry" << endl;
-        cout << "5. Delete password by name" << endl;
-        cout << "Input number for the action you would like to do: ";
-        cin >> action;
-        switch(action) {
-            case 1:
-                get_password();
-            case 2:
-                browse_passwords();
-            case 3:
-                new_password();
-            case 4:
-                edit_entry();
-            case 5:
-                delete_password();
-            default:
-                cout << "Invalid action given: " << action << endl;
+        bool program = true;
+        while (program == true) {
+            cout << "What would you like to do" << endl;
+            cout << "1. Get password by id or name" << endl;
+            cout << "2. Browse passwords" << endl;
+            cout << "3. Generate passwords" << endl;
+            cout << "4. Edit password entry" << endl;
+            cout << "5. Delete password by name" << endl;
+            cout << "6. Close program" << endl;
+            cout << "Input number for the action you would like to do: ";
+            cin >> action;
+            switch(action) {
+                case 1:
+                    get_password();
+                    break;
+                case 2:
+                    browse_passwords();
+                    break;
+                case 3:
+                    new_password();
+                    break;
+                case 4:
+                    edit_entry();
+                    break;
+                case 5:
+                    delete_password();
+                    break;
+                case 6:
+                    program = false;
+                    break;
+                default:
+                    cout << "Invalid action given: " << action << endl;
+                    break;
+            }
         }
     } else {
         return 0;
     }
+    return 0;
 }
