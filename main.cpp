@@ -75,9 +75,6 @@ map<string, string> search_by_id(string input) {
         const unsigned char* name = sqlite3_column_text(stmt, 1);
         const unsigned char* password = sqlite3_column_text(stmt, 2);
 
-        cout << "id: " << fetched_id << " name: " << name << endl;
-
-
         result["id"] = to_string(fetched_id);
         result["name"] = name ? reinterpret_cast<const char*>(name): "";
         result["password"] = password ? reinterpret_cast<const char*>(password): "";
@@ -143,7 +140,7 @@ map<string, string> search_by_name(string input) {
             cout << "id: " << fetched_id << " name: " << name << endl;
         } else if (exit == SQLITE_DONE) {
             if (i == 0) {
-                cout << "Password name now found" << endl;
+                cout << "Password name not found" << endl;
             }
             else if (i > 1) {
                 int id;
@@ -446,18 +443,16 @@ void get_password() {
 
     if (str_value != true) {
         result = search_by_id(search_input);
-        if (!result.empty()) {
-            auto pw_entry = result.find("password");
-            string password = pw_entry->second;
-            copy_to_clipboard(password);
-        }
      } else {
         result = search_by_name(search_input);
-        if (!result.empty()) {
-            auto pw_entry = result.find("password");
-            string password = pw_entry->second;
-            copy_to_clipboard(password);
-        }
+    }
+    if (!result.empty()) {
+        auto id_entry = result.find("id");
+        auto name_entry = result.find("name");
+        cout << "id: " << id_entry->second << " name: " << name_entry->second << endl;
+        auto pw_entry = result.find("password");
+        string password = pw_entry->second;
+        copy_to_clipboard(password);
     }
 }
 
@@ -575,10 +570,6 @@ void edit_db_entry(map<string, string> entry) {
         return;
     }
 
-    for (const auto& pair : entry) {
-        cout << "key: " << pair.first << " value: " << pair.second << endl; 
-    }
-
     auto id_entry = entry.find("id");
     auto name_entry = entry.find("name");
     auto password_entry = entry.find("password");
@@ -674,6 +665,8 @@ map<string, string>edit_entry_fields(map<string, string> entry) {
             case 3:
                 i = 99;
                 break;
+            default:
+                cout << "Invalid input: "<< input << endl;
         }
     }
     return result;
@@ -696,13 +689,16 @@ void edit_entry() {
 
     if (!val_string) {
         search_result = search_by_id(input);
-        if (!search_result.empty()) {
-            edited_entry = edit_entry_fields(search_result);
-            if (!edited_entry.empty()) {
-                edit_db_entry(edited_entry);
-            }
+    } else {
+        search_result = search_by_name(input);
+    }
+    if (!search_result.empty()) {
+        edited_entry = edit_entry_fields(search_result);
+        if (!edited_entry.empty()) {
+            edit_db_entry(edited_entry);
         }
     }
+
 }
 
 int main () {
