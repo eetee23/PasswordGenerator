@@ -43,7 +43,7 @@ void copy_to_clipboard(const string& random_password) {
     #endif
 }
 
-void search_by_id(string input) {
+map<string, string> search_by_id(string input) {
     sqlite3* db;
     char message_error;
     int id = stoi(input);
@@ -61,29 +61,36 @@ void search_by_id(string input) {
     if (exit != SQLITE_OK) {
         cerr << "Failed to prepare select statement" << sqlite3_errmsg(db) << endl;
         sqlite3_close(db);
-        return;
+        return {};
     }
 
     sqlite3_bind_int(stmt, 1, id);
 
     exit = sqlite3_step(stmt);
 
+    map<string, string> result;
+
     if (exit == SQLITE_ROW) {
         int fetched_id = sqlite3_column_int(stmt, 0);
         const unsigned char* name = sqlite3_column_text(stmt, 1);
         const unsigned char* password = sqlite3_column_text(stmt, 2);
 
-        cout << "id: " << fetched_id << " name: " << name << " password: " << password << endl;
+        cout << "id: " << fetched_id << " name: " << name << endl;
+
+
+        result["id"] = to_string(fetched_id);
+        result["name"] = name ? reinterpret_cast<const char*>(name): "";
+        result["password"] = password ? reinterpret_cast<const char*>(password): "";
     } else {
         cerr << "ERROR in selecting password: " << sqlite3_errmsg(db) << endl;
         sqlite3_finalize(stmt);
         sqlite3_close(db);
-        return;
+        return {};
     }
 
     sqlite3_finalize(stmt);
     sqlite3_close(db);
-    return;
+    return result;
 }
 
 void login (string &login_username, string &login_password) {
@@ -94,7 +101,7 @@ void login (string &login_username, string &login_password) {
     cin >> login_password;
 }
 
-void search_by_name(string input) {
+map<string, string> search_by_name(string input) {
     sqlite3* db;
     char message_error;
     int exit = sqlite3_open("database/passwords.db", &db);
@@ -111,15 +118,16 @@ void search_by_name(string input) {
     if (exit != SQLITE_OK) {
         cerr << "Failed to prepare select statement" << sqlite3_errmsg(db) << endl;
         sqlite3_close(db);
-        return;
+        return {};
     }
 
     sqlite3_bind_text(stmt, 1, input.c_str(), -1, SQLITE_TRANSIENT);
 
     vector<map<string, string>> all_rows;
     map<string,string> row;
+    map<string,string> result;
 
-    for(int i = 0; i < 99; i++) {
+    for (int i = 0; i < 99; i++) {
         exit = sqlite3_step(stmt);
         if (exit == SQLITE_ROW) {
             int fetched_id = sqlite3_column_int(stmt, 0);
@@ -147,31 +155,25 @@ void search_by_name(string input) {
                     if (id_check_row != result_row.end()) {
                         int id_check = stoi(id_check_row->second);
                         if (id == id_check) {
-                            auto id_pw_row = result_row.find("password");
-                            string pw = id_pw_row->second;
-                            copy_to_clipboard(pw);
+                            result = result_row;
                             break;
                         }
                     }
                 }
             } else {
-                auto pw_check = row.find("password");
-                if (pw_check != row.end()) {
-                    string pw = pw_check->second;
-                    copy_to_clipboard(pw);
-                } 
+                result = row;
             }
             break;
         }else {
             cerr << "ERROR in selecting password: " << sqlite3_errmsg(db) << endl;
             sqlite3_finalize(stmt);
             sqlite3_close(db);
-            return;
+            return {};
         }
     }
     sqlite3_finalize(stmt);
     sqlite3_close(db);
-    return;
+    return result;
 }
 
 int check_credentials(string username, string password) {
@@ -430,6 +432,7 @@ void create_credentials_to_db() {
 void get_password() {
     string search_input;
     bool str_value = false;
+    map<string, string> result;
 
     cout << "Input password id or name: ";
     cin >> search_input;
@@ -442,9 +445,83 @@ void get_password() {
     }
 
     if (str_value != true) {
-        search_by_id(search_input);
+        result = search_by_id(search_input);
+        if (!result.empty()) {
+            auto pw_entry = result.find("password");
+            string password = pw_entry->second;
+            copy_to_clipboard(password);
+        }
      } else {
-        search_by_name(search_input);
+        result = search_by_name(search_input);
+        if (!result.empty()) {
+            auto pw_entry = result.find("password");
+            string password = pw_entry->second;
+            copy_to_clipboard(password);
+        }
+    }
+}
+
+void delete_entry(int id) {
+    sqlite3* db;
+    char* message_error;
+
+    int exit = sqlite3_open("database/passwords.db", &db);
+
+    if (exit != SQLITE_OK) {
+        cerr << "ERROR opening database for deleting passwords" << sqlite3_errmsg(db) << endl;
+        return;
+    }
+
+    string delete_password = "DELETE FROM passwords WHERE ID = ?;";
+    sqlite3_stmt* stmt;
+
+    exit = sqlite3_prepare_v2(db, delete_password.c_str(), -1, &stmt, nullptr);
+
+    if (exit != SQLITE_OK) {
+        cerr << "Failed to prepare select statement" << sqlite3_errmsg(db) << endl;
+        sqlite3_close(db);
+        return;
+    }
+
+    sqlite3_bind_int(stmt, 1, id);
+
+    exit = sqlite3_step(stmt);
+
+    if (exit == SQLITE_DONE) {
+        cout << "Entry deletion compelete" << endl;
+    } else {
+        cerr << "Entry deletion FAILED" << sqlite3_errmsg(db) << endl;
+    }
+
+    sqlite3_finalize(stmt);
+    sqlite3_close(db);
+    return;
+}
+
+void delete_password() {
+    string input;
+    bool str_value = false;
+    map<string, string> result;
+    cout << "For deleting give entry id or name: ";
+    cin >> input;
+
+    for (char ch : input) {
+        if (!(ch >= 48 && ch <= 57)) {
+            str_value = true;
+            break;
+        }
+    }
+
+    if (str_value != true) {
+        int int_input = stoi(input);
+        delete_entry(int_input);
+    } else {
+        result = search_by_name(input);
+        if (!result.empty()) {
+            auto id_entry = result.find("id");
+            int id = stoi(id_entry->second);
+            delete_entry(id);
+        }
     }
 }
 
@@ -488,6 +565,146 @@ void browse_passwords() {
     return;
 }
 
+void edit_db_entry(map<string, string> entry) {
+    sqlite3* db;
+    
+    int exit = sqlite3_open("database/passwords.db", &db);
+
+    if(exit != SQLITE_OK) {
+        cerr << "ERROR opening database for entry editing" << sqlite3_errmsg(db) << endl;
+        return;
+    }
+
+    for (const auto& pair : entry) {
+        cout << "key: " << pair.first << " value: " << pair.second << endl; 
+    }
+
+    auto id_entry = entry.find("id");
+    auto name_entry = entry.find("name");
+    auto password_entry = entry.find("password");
+
+    int id = stoi(id_entry->second);
+    entry.erase(id_entry);
+
+    sqlite3_stmt* stmt;    
+    for (const auto& pair : entry) {
+        string key = pair.first;
+        string value = pair.second;
+
+        string edit_entry = "UPDATE passwords SET "+ key +" = ? WHERE ID = ?;";
+
+        exit = sqlite3_prepare(db, edit_entry.c_str(), -1, &stmt, nullptr);
+
+        if (exit != SQLITE_OK) {
+            cerr << "Failed to prepare UPDATE statement " << sqlite3_errmsg(db) << endl;
+            sqlite3_close(db);
+            return;
+        }
+    
+        sqlite3_bind_text(stmt, 1, value.c_str(), -1, SQLITE_TRANSIENT);
+        sqlite3_bind_int(stmt, 2, id);
+
+        exit = sqlite3_step(stmt);
+
+        if (exit != SQLITE_DONE) {
+            cerr << "Entry editing FAILED try again " << sqlite3_errmsg(db) << endl;
+            sqlite3_finalize(stmt);
+            break;
+        }
+        sqlite3_finalize(stmt);
+    }
+    sqlite3_close(db);
+    return;
+}
+
+map<string, string>edit_entry_fields(map<string, string> entry) {
+    auto id_entry = entry.find("id");
+    auto name_entry = entry.find("name");
+    auto password_entry = entry.find("password");
+    string entry_value;
+    map<string, string> result = {};
+    for (int i = 0; i < 99; i++) {
+        int input;
+        string user_input;
+
+        cout << "1. Name" << endl;
+        cout << "2. Password" << endl;
+        cout << "3. Close" << endl;
+        cout << "Enter number for what you would like to edit: ";
+        cin >> input;
+
+        switch(input) {
+            case 1:
+                if (result.find("id") == result.end()) {
+                    cout << "id: " << id_entry->second << endl;
+                    string id_value = id_entry->second;
+                    result["id"] = id_value;
+                }
+                if (result.find("name") != result.end()) {
+                    cout << "Current name: " << result["name"] << endl;
+                    cout << "Enter new name: ";
+                    cin >> user_input;
+                    result["name"] = user_input;
+                } else {
+                    entry_value = name_entry->second;
+                    cout << "Current name: " << entry_value << endl;
+                    cout << "Enter new name: ";
+                    cin >> user_input;
+                    result["name"] = user_input;
+                }
+                break;
+            case 2:
+                if (result.find("id") == result.end()) {
+                    string id_value = id_entry->second;
+                    result["id"] = id_value;
+                }
+                if (result.find("password") != result.end()) {
+                    cout << "Current password: " << result["password"] << endl;
+                    cout << "Enter new password: ";
+                    cin >> user_input;
+                    result["password"] = user_input;
+                } else {
+                    entry_value = password_entry->second;
+                    cout << "Current password " << entry_value << endl;
+                    cout << "Enter new password: ";
+                    cin >> user_input;
+                    result["password"] = user_input;
+                }
+                break;
+            case 3:
+                i = 99;
+                break;
+        }
+    }
+    return result;
+}
+
+void edit_entry() {
+    string input;
+    bool val_string = false;
+    map<string, string> search_result, edited_entry;
+
+    cout << "Enter id or name for the password you would like to edit: ";
+    cin >> input;
+
+    for (char ch : input) {
+        if (!(ch >= 48 && ch <= 57)) {
+            val_string = true;
+            break;
+        }
+    }
+
+    if (!val_string) {
+        search_result = search_by_id(input);
+        if (!search_result.empty()) {
+            edited_entry = edit_entry_fields(search_result);
+            if (!edited_entry.empty()) {
+                edit_db_entry(edited_entry);
+            }
+        }
+    }
+}
+
 int main () {
     int result, check_login, db_check, db_credentials, start;
     string login_username, login_password;
@@ -512,26 +729,43 @@ int main () {
     check_login = check_credentials(username, password);
     if (check_login == 1) {
         int action;
-        cout << "What would you like to do" << endl;
-        cout << "1. Get password by id or name" << endl;
-        cout << "2. Browse passwords" << endl;
-        cout << "3. Generate passwords" << endl;
-        cout << "4. Delete password by name" << endl;
-        cout << "Input number for the action you would like to do: ";
-        cin >> action;
-        switch(action) {
-            case 1:
-                get_password();
-            case 2:
-                browse_passwords();
-            case 3:
-                new_password();
-            case 4:
-                // Delete password by id or name
-            default:
-                cout << "Invalid action given: " << action << endl;
+        bool program = true;
+        while (program == true) {
+            cout << "What would you like to do" << endl;
+            cout << "1. Get password by id or name" << endl;
+            cout << "2. Browse passwords" << endl;
+            cout << "3. Generate passwords" << endl;
+            cout << "4. Edit password entry" << endl;
+            cout << "5. Delete password by name" << endl;
+            cout << "6. Close program" << endl;
+            cout << "Input number for the action you would like to do: ";
+            cin >> action;
+            switch(action) {
+                case 1:
+                    get_password();
+                    break;
+                case 2:
+                    browse_passwords();
+                    break;
+                case 3:
+                    new_password();
+                    break;
+                case 4:
+                    edit_entry();
+                    break;
+                case 5:
+                    delete_password();
+                    break;
+                case 6:
+                    program = false;
+                    break;
+                default:
+                    cout << "Invalid action given: " << action << endl;
+                    break;
+            }
         }
     } else {
         return 0;
     }
+    return 0;
 }
